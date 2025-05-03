@@ -60,6 +60,7 @@ def main():
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CommandHandler("htet", handle_htet))
     print("Bot is running... (Use /htet)")
+    print("Token loaded:", TELEGRAM_BOT_TOKEN)
     updater.start_polling()
     updater.idle()
 
