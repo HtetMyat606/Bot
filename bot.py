@@ -44,7 +44,7 @@ def ask_gemini(prompt: str) -> str:
 def handle_htet(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.effective_chat.id)
     if chat_id not in ALLOWED_GROUP_IDS:
-        update.message.reply_text("This bot is built for GROUP 1/nYou can join to use 😉https://t.me/+wAiqGuZAlTdmMjY1")
+        update.message.reply_text("🚧This bot is built only for GROUP 1\n😁You can ask @Kamisama_HM to use")
         return  # Ignore messages from unauthorized chats
 
     user_input = ' '.join(context.args)
