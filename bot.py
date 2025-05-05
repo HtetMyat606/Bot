@@ -27,7 +27,7 @@ def ask_gemini(prompt: str) -> str:
                 url,
                 headers={'Content-Type': 'application/json'},
                 json={"contents": [{"parts": [{"text": prompt}]}]},
-                timeout=10
+                timeout=20
             )
             data = response.json()
             if 'candidates' in data:
