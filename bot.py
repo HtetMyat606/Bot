@@ -2,13 +2,11 @@ import os
 import base64
 import requests
 from dotenv import load_dotenv
-from telegram import Update, InputFile
+from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-from keep_alive import keep_alive
 
 # Load environment variables
 load_dotenv()
-keep_alive()
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 GEMINI_API_KEYS = os.getenv('GEMINI_API_KEYS', '').split(',')
@@ -86,40 +84,56 @@ def ask_gemini_with_image(prompt: str, image_path: str) -> str:
             return f"Request failed: {e}"
     return "All API keys failed or quota exceeded."
 
-def handle_htet(update: Update, context: CallbackContext) -> None:
+def handle_htet_text(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.effective_chat.id)
     if chat_id not in ALLOWED_GROUP_IDS:
-        update.message.reply_text("🚧This bot is only for approved groups. Ask @Kamisama_HM to join.")
+        update.message.reply_text("🚧 This bot is only for allowed groups. Ask @Kamisama_HM to join.")
         return
 
     prompt = ' '.join(context.args).strip()
+    if not prompt:
+        update.message.reply_text("Usage: /htet <your prompt>")
+        return
+
+    update.message.reply_text("Processing prompt...")
+    result = ask_gemini_text(prompt)
+    update.message.reply_text(result)
+
+def handle_htet_photo(update: Update, context: CallbackContext) -> None:
+    chat_id = str(update.effective_chat.id)
+    if chat_id not in ALLOWED_GROUP_IDS:
+        update.message.reply_text("🚧 This bot is only for allowed groups. Ask @Kamisama_HM to join.")
+        return
+
+    caption = update.message.caption or ""
+    if not caption.startswith("/htet"):
+        return
+
+    prompt = caption.replace("/htet", "").strip() or "Describe this image"
     photos = update.message.photo
+    if not photos:
+        update.message.reply_text("No photo found.")
+        return
 
-    if photos:
-        photo = photos[-1].get_file()
-        image_path = os.path.join(DOWNLOAD_DIR, f"{photo.file_id}.jpg")
-        photo.download(image_path)
-        prompt = prompt or "Describe this image."
-        update.message.reply_text("Analyzing image, please wait...")
-        result = ask_gemini_with_image(prompt, image_path)
-    else:
-        if not prompt:
-            update.message.reply_text("Usage: /htet <text> or /htet <caption> with image.")
-            return
-        update.message.reply_text("Processing text prompt...")
-        result = ask_gemini_text(prompt)
+    photo = photos[-1].get_file()
+    image_path = os.path.join(DOWNLOAD_DIR, f"{photo.file_id}.jpg")
+    photo.download(image_path)
 
+    update.message.reply_text("Analyzing image...")
+    result = ask_gemini_with_image(prompt, image_path)
     update.message.reply_text(result)
 
 def main():
     updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
-    dispatcher.add_handler(CommandHandler("htet", handle_htet, run_async=True))
-    print("Bot is running... Use /htet or /htet + image")
+    dispatcher.add_handler(CommandHandler("htet", handle_htet_text))
+    dispatcher.add_handler(MessageHandler(Filters.photo & Filters.caption, handle_htet_photo))
+
+    print("Bot is running... Send /htet or image with /htet caption.")
     updater.start_polling()
     updater.idle()
 
 if __name__ == '__main__':
     main()
-    
+
