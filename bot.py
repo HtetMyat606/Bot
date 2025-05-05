@@ -1,8 +1,9 @@
 import os
+import base64
 import requests
 from dotenv import load_dotenv
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram import Update, InputFile
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from keep_alive import keep_alive
 
 # Load environment variables
@@ -14,55 +15,111 @@ GEMINI_API_KEYS = os.getenv('GEMINI_API_KEYS', '').split(',')
 OWNER_CHAT_ID = os.getenv('OWNER_CHAT_ID')
 ALLOWED_GROUP_IDS = os.getenv('ALLOWED_GROUP_IDS', '').split(',')
 
-# Track current key index
+GEMINI_MODEL = 'gemini-2.0-flash'
+GEMINI_ENDPOINT = f'https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent'
+DOWNLOAD_DIR = 'downloads'
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
 key_index = 0
 
-def ask_gemini(prompt: str) -> str:
+def ask_gemini_text(prompt: str) -> str:
     global key_index
     for _ in range(len(GEMINI_API_KEYS)):
         key = GEMINI_API_KEYS[key_index].strip()
-        url = f'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro-001:generateContent?key={key}'
+        url = f'{GEMINI_ENDPOINT}?key={key}'
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}]
+        }
         try:
+            response = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
+            data = response.json()
+            if 'candidates' in data:
+                return data['candidates'][0]['content']['parts'][0]['text']
+            elif 'error' in data:
+                msg = data['error'].get('message', '')
+                if 'quota' in msg.lower():
+                    key_index = (key_index + 1) % len(GEMINI_API_KEYS)
+                    continue
+                return f"Gemini Error: {msg}"
+        except Exception as e:
+            return f"Request failed: {e}"
+    return "All API keys failed or quota exceeded."
+
+def ask_gemini_with_image(prompt: str, image_path: str) -> str:
+    global key_index
+    for _ in range(len(GEMINI_API_KEYS)):
+        key = GEMINI_API_KEYS[key_index].strip()
+        try:
+            with open(image_path, 'rb') as f:
+                image_data = base64.b64encode(f.read()).decode('utf-8')
+
+            payload = {
+                "contents": [{
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": "image/jpeg",
+                                "data": image_data
+                            }
+                        }
+                    ]
+                }]
+            }
+
             response = requests.post(
-                url,
-                headers={'Content-Type': 'application/json'},
-                json={"contents": [{"parts": [{"text": prompt}]}]},
-                timeout=20
+                f"{GEMINI_ENDPOINT}?key={key}",
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=30
             )
             data = response.json()
             if 'candidates' in data:
                 return data['candidates'][0]['content']['parts'][0]['text']
-            elif 'error' in data and 'quota' in data['error'].get('message', '').lower():
-                key_index = (key_index + 1) % len(GEMINI_API_KEYS)
-                continue  # Try next key
             elif 'error' in data:
-                return f"Gemini Error: {data['error']['message']}"
+                msg = data['error'].get('message', '')
+                if 'quota' in msg.lower():
+                    key_index = (key_index + 1) % len(GEMINI_API_KEYS)
+                    continue
+                return f"Gemini Error: {msg}"
         except Exception as e:
             return f"Request failed: {e}"
-    return "All Gemini API keys have reached their limits or failed."
+    return "All API keys failed or quota exceeded."
 
 def handle_htet(update: Update, context: CallbackContext) -> None:
     chat_id = str(update.effective_chat.id)
     if chat_id not in ALLOWED_GROUP_IDS:
-        update.message.reply_text("🚧This bot is built only for GROUP 1\n😁You can ask @Kamisama_HM to use")
-        return  # Ignore messages from unauthorized chats
-
-    user_input = ' '.join(context.args)
-    if not user_input:
-        update.message.reply_text("Usage: /htet <your message>")
+        update.message.reply_text("🚧This bot is only for approved groups. Ask @Kamisama_HM to join.")
         return
 
-    reply = ask_gemini(user_input)
-    update.message.reply_text(reply)
+    prompt = ' '.join(context.args).strip()
+    photos = update.message.photo
+
+    if photos:
+        photo = photos[-1].get_file()
+        image_path = os.path.join(DOWNLOAD_DIR, f"{photo.file_id}.jpg")
+        photo.download(image_path)
+        prompt = prompt or "Describe this image."
+        update.message.reply_text("Analyzing image, please wait...")
+        result = ask_gemini_with_image(prompt, image_path)
+    else:
+        if not prompt:
+            update.message.reply_text("Usage: /htet <text> or /htet <caption> with image.")
+            return
+        update.message.reply_text("Processing text prompt...")
+        result = ask_gemini_text(prompt)
+
+    update.message.reply_text(result)
 
 def main():
     updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
-    dispatcher.add_handler(CommandHandler("htet", handle_htet))
-    print("Bot is running... (Use /htet)")
-    #print("Token loaded:", TELEGRAM_BOT_TOKEN)
+
+    dispatcher.add_handler(CommandHandler("htet", handle_htet, run_async=True))
+    print("Bot is running... Use /htet or /htet + image")
     updater.start_polling()
     updater.idle()
 
 if __name__ == '__main__':
     main()
+    
