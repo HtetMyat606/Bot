@@ -4,9 +4,11 @@ import requests
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from keep_alive import keep_alive
 
 # Load environment variables
 load_dotenv()
+keep_alive()
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 GEMINI_API_KEYS = os.getenv('GEMINI_API_KEYS', '').split(',')
@@ -95,7 +97,7 @@ def handle_htet_text(update: Update, context: CallbackContext) -> None:
         update.message.reply_text("Usage: /htet <your prompt>")
         return
 
-    update.message.reply_text("Processing prompt...")
+    update.message.reply_text("=>ဆောင်ရွက်နေပါသည်🟢......")
     result = ask_gemini_text(prompt)
     update.message.reply_text(result)
 
@@ -119,7 +121,7 @@ def handle_htet_photo(update: Update, context: CallbackContext) -> None:
     image_path = os.path.join(DOWNLOAD_DIR, f"{photo.file_id}.jpg")
     photo.download(image_path)
 
-    update.message.reply_text("Analyzing image...")
+    update.message.reply_text("=>ရုပ်ပုံအားစီစစ်နေပါသဖြင့်ခနစောင့်ပေးပါ\n=>🌄...")
     result = ask_gemini_with_image(prompt, image_path)
     update.message.reply_text(result)
 
