@@ -3,3 +3,4 @@ requests
 flask
 diskcache
 dotenv
+base64
