@@ -1,4 +1,5 @@
 import os
+import time
 import base64
 import requests
 from dotenv import load_dotenv
@@ -27,9 +28,7 @@ def ask_gemini_text(prompt: str) -> str:
     for _ in range(len(GEMINI_API_KEYS)):
         key = GEMINI_API_KEYS[key_index].strip()
         url = f'{GEMINI_ENDPOINT}?key={key}'
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}]
-        }
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
         try:
             response = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
             data = response.json()
@@ -94,11 +93,13 @@ def handle_htet_text(update: Update, context: CallbackContext) -> None:
 
     prompt = ' '.join(context.args).strip()
     if not prompt:
-        update.message.reply_text("Usage: /htet <your prompt>")
+        update.message.reply_text("=>မေးလိုရာမေးလို့ရပါတယ်ဗျ😁\n=>usage: /htet <question>")
         return
 
-    update.message.reply_text("=>ဆောင်ရွက်နေပါသည်🟢......")
+    msg = update.message.reply_text("=>ဆောင်ရွက်နေပါသည်🟢......")
     result = ask_gemini_text(prompt)
+    time.sleep(0.5)
+    msg.delete()
     update.message.reply_text(result)
 
 def handle_htet_photo(update: Update, context: CallbackContext) -> None:
@@ -121,9 +122,15 @@ def handle_htet_photo(update: Update, context: CallbackContext) -> None:
     image_path = os.path.join(DOWNLOAD_DIR, f"{photo.file_id}.jpg")
     photo.download(image_path)
 
-    update.message.reply_text("=>ရုပ်ပုံအားစီစစ်နေပါသဖြင့်ခနစောင့်ပေးပါ\n=>🌄...")
+    msg = update.message.reply_text("=>ရုပ်ပုံအားစီစစ်နေပါသဖြင့်ခနစောင့်ပေးပါ\n=>🌄......")
     result = ask_gemini_with_image(prompt, image_path)
+    time.sleep(0.5)
+    msg.delete()
     update.message.reply_text(result)
+
+    # Delete image after processing
+    if os.path.exists(image_path):
+        os.remove(image_path)
 
 def main():
     updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
@@ -138,4 +145,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-
+            
